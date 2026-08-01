@@ -8,7 +8,14 @@ const { success, error } = require('../utils/apiResponse');
  */
 exports.getCategories = async (req, res, next) => {
   try {
-    const categories = await Category.find().sort({ name: 1 });
+    let categories = await Category.find().sort({ name: 1 });
+    const pipesIndex = categories.findIndex(
+      c => c.slug === 'pipes-and-pipe-fittings' || c.name.toLowerCase().includes('pipes')
+    );
+    if (pipesIndex > -1) {
+      const [pipesCat] = categories.splice(pipesIndex, 1);
+      categories.unshift(pipesCat);
+    }
     return success(res, 200, 'Categories retrieved successfully', categories);
   } catch (err) {
     next(err);

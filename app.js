@@ -13,6 +13,7 @@ const contactRoutes = require('./routes/contactRoutes');
 const quoteRoutes = require('./routes/quoteRoutes');
 const downloadRoutes = require('./routes/downloadRoutes');
 const authRoutes = require('./routes/authRoutes');
+const uploadRoutes = require('./routes/uploadRoutes');
 
 // Middleware imports
 const { notFound, errorHandler } = require('./middleware/errorMiddleware');
@@ -68,6 +69,7 @@ app.use('/api/contact', contactRoutes);
 app.use('/api/quote', quoteRoutes);
 app.use('/api/downloads', downloadRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // ─── Health Check ───
 app.get('/api/health', (req, res) => {
