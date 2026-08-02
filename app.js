@@ -25,7 +25,12 @@ app.use(helmet());
 // ─── CORS ───
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || '*',
+    origin: [
+      process.env.CLIENT_URL, 
+      'https://iptsglobal.com', 
+      'https://www.iptsglobal.com',
+      'http://localhost:5173'
+    ].filter(Boolean),
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
