@@ -20,13 +20,18 @@ const { notFound, errorHandler } = require('./middleware/errorMiddleware');
 const app = express();
 
 // ─── Security Headers ───
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
 
 // ─── CORS ───
 app.use(
   cors({
-    origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    origin: true, // Reflects request origin, supporting credentials & avoiding '*' limits
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
