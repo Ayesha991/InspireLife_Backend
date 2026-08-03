@@ -8,6 +8,11 @@ const productSchema = new mongoose.Schema(
       required: [true, 'Product name is required'],
       trim: true,
     },
+    productNameAr: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     slug: {
       type: String,
       unique: true,
@@ -19,11 +24,21 @@ const productSchema = new mongoose.Schema(
       trim: true,
       index: true,
     },
+    categoryAr: {
+      type: String,
+      default: '',
+      trim: true,
+      index: true,
+    },
     categorySlug: {
       type: String,
       index: true,
     },
     description: {
+      type: String,
+      default: '',
+    },
+    descriptionAr: {
       type: String,
       default: '',
     },
@@ -44,14 +59,24 @@ const productSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    specificationsAr: {
+      type: String,
+      default: '',
+    },
     // Structured specifications for frontend display (admin-enrichable)
     specDetails: [
       {
         label: { type: String },
+        labelAr: { type: String },
         value: { type: String },
+        valueAr: { type: String },
       },
     ],
     features: {
+      type: [String],
+      default: [],
+    },
+    featuresAr: {
       type: [String],
       default: [],
     },
@@ -59,7 +84,15 @@ const productSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    applicationsAr: {
+      type: [String],
+      default: [],
+    },
     industries: {
+      type: [String],
+      default: [],
+    },
+    industriesAr: {
       type: [String],
       default: [],
     },
@@ -67,7 +100,15 @@ const productSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    materialsAr: {
+      type: [String],
+      default: [],
+    },
     brand: {
+      type: String,
+      default: '',
+    },
+    brandAr: {
       type: String,
       default: '',
     },
@@ -85,10 +126,15 @@ const productSchema = new mongoose.Schema(
 // Text index for full-text search across multiple fields
 productSchema.index({
   productName: 'text',
+  productNameAr: 'text',
   category: 'text',
+  categoryAr: 'text',
   description: 'text',
+  descriptionAr: 'text',
   brand: 'text',
+  brandAr: 'text',
   specifications: 'text',
+  specificationsAr: 'text',
 });
 
 // Auto-generate slug before saving

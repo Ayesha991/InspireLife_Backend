@@ -34,16 +34,21 @@ exports.getProducts = async (req, res, next) => {
       ];
     }
 
-    // Search filter (text search across name, category, description, specs)
+    // Search filter (text search across name, category, description, specs in both English and Arabic)
     if (search) {
       const searchRegex = new RegExp(search, 'i');
       const searchFilter = {
         $or: [
           { productName: searchRegex },
+          { productNameAr: searchRegex },
           { category: searchRegex },
+          { categoryAr: searchRegex },
           { description: searchRegex },
+          { descriptionAr: searchRegex },
           { brand: searchRegex },
+          { brandAr: searchRegex },
           { specifications: searchRegex },
+          { specificationsAr: searchRegex },
         ],
       };
 

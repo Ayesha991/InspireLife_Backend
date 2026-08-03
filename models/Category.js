@@ -9,12 +9,21 @@ const categorySchema = new mongoose.Schema(
       unique: true,
       trim: true,
     },
+    nameAr: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     slug: {
       type: String,
       unique: true,
       index: true,
     },
     description: {
+      type: String,
+      default: '',
+    },
+    descriptionAr: {
       type: String,
       default: '',
     },
