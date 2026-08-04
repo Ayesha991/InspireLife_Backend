@@ -1,8 +1,8 @@
 /**
- * Database Translation & Details Seeding Script (Static Data Version)
+ * Database Seeding Script (Filtered Categories & Products Version)
  * 
- * Seeds category and product translations directly using static maps.
- * Enriches specifications and other details using productDetailsMap.
+ * Seeds exact categories and products specified by user requirement into local MongoDB.
+ * Dynamically fetches image URLs from Cloudinary and maps them to relevant products.
  * 
  * Usage: node utils/seedData.js
  */
@@ -10,6 +10,7 @@
 const path = require('path');
 const dotenv = require('dotenv');
 const mongoose = require('mongoose');
+const cloudinary = require('cloudinary').v2;
 
 // Load env vars
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
@@ -17,293 +18,226 @@ dotenv.config({ path: path.join(__dirname, '..', '.env') });
 const Product = require('../models/Product');
 const Category = require('../models/Category');
 
-// Hardcoded translations from dynamicTranslations.js
-const dynamicTranslations = {
-  categories: {
-    "Pipes & Pipe Fittings": "الأنابيب ووصلات الأنابيب",
-    "Oil Field Equipment": "معدات حقول النفط",
-    "Valves": "الصمامات",
-    "Mechanical Products": "المنتجات الميكانيكية",
-    "Process Control Products": "منتجات التحكم في العمليات",
-    "Pneumatic Products": "المنتجات الهوائية",
-    "Electrical Products and Accessories": "المنتجات الكهربائية وملحقاتها",
-    "Oil & Gas Industry Chemicals": "كيماويات صناعة النفط والغاز",
-    "Maritime / Ship Maintenance Chemicals": "كيماويات صيانة السفن / البحرية",
-    "Calibration Gas Cylinders": "أسطوانات غاز المعايرة",
-    "Flow Meter Products": "منتجات مقياس التدفق",
-    "Hydraulic / Solenoid Valve Series": "سلسلة الصمامات الهيدروليكية / اللولبية",
-    "PLC and HMI Products": "منتجات PLC و HMI",
-    "Sensor Products": "منتجات الاستشعار",
-    "Others": "أخرى"
-  },
-  products: {
-    "Stainless Steel Pipes (304, 316)": "أنابيب الصلب المقاوم للصدأ (304، 316)",
-    "Cast Iron Pipe": "أنبوب حديد الزهر",
-    "UPVC Pipes & Fittings": "أنابيب ووصلات UPVC",
-    "Copper Pipes": "أنابيب نحاسية",
-    "GI Pipes": "أنابيب الحديد المجلفن",
-    "PPR Pipes & Fittings": "أنابيب ووصلات PPR",
-    "Pex Pipe": "أنبوب بيكس",
-    "Cross Linked Polyethylene Pipe": "أنبوب البولي إيثيلين المتقاطع",
-    "Rigid Pipe": "أنبوب صلب",
-    "HDPE Pipe": "أنبوب HDPE",
-    "Flexi Pipe": "أنبوب مرن",
-    "ABS Pipe": "أنبوب ABS",
-    "Rainwater Pipe": "أنبوب مياه الأمطار",
-    "CPVC Pipes": "أنابيب CPVC",
-    "Polyvinyl Chloride (PVC) Pipes": "أنابيب البولي فينيل كلوريد (PVC)",
-    "Concrete Pipes": "أنابيب خرسانية",
-    "Polybutylene Pipes": "أنابيب البولي بيوتيلين",
-    "Hoses": "الخراطيم",
-    "Hose Fittings": "وصلات الخراطيم",
-    "O-Rings & Seal Rings": "الحلقات المانعة للتسرب",
-    "Manifolds": "المشعبات",
-    "Manifold Fittings": "وصلات المشعبات",
-    "BOP Testing Unit": "وحدة اختبار مانع الانفجار",
-    "Air Control Valves": "صمامات التحكم في الهواء",
-    "BOP Spare Parts": "قطع غيار مانع الانفجار",
-    "Pressure Gauges": "مقاييس الضغط",
-    "Pressure Regulators": "منظمات الضغط",
-    "Mud Chemicals": "كيماويات الطين",
-    "Needle Valves": "الصمامات الإبرية",
-    "Safety Clamps": "مشابك السلامة",
-    "Wellheads": "رؤوس الآبار",
-    "Data Header": "جامع البيانات",
-    "Hub Connections": "وصلات المحور",
-    "Top Connectors": "الموصلات العلوية",
-    "Spools - Drilling, Adapter & Spacer": "البكرات - الحفر والمحول والفاصل",
-    "Double Studded Adapter Flanges": "شفة محول مزدوجة المسامير",
-    "Cast Steel Gate, Globe and Check Valves": "صمامات البوابة والكرة والفحص من الصلب المصبوب",
-    "Forged Steel Gate, Globe and Check Valves": "صمامات البوابة والكرة والفحص من الصلب المطروق",
-    "Trunnion Mounted Ball Valve": "صمام كروي مرتكز على محور",
-    "Floating Ball Valves": "صمامات كروية عائمة",
-    "Steel Lubricated Plug Valves": "صمامات سدادة مشحمة من الصلب",
-    "Pressure Seal Cast Steel Valves": "صمامات صلب مصبوب مانعة للتسرب",
-    "Duo Check Cast Steel Valves": "صمامات فحص مزدوجة من الصلب المصبوب",
-    "Slab Gate Valves": "صمامات البوابة اللوحية",
-    "Expanding Gate Valves": "صمامات البوابة المتمددة",
-    "Butterfly Valves": "صمامات الفراشة",
-    "Instrumentation DBB Valves": "صمامات DBB للأجهزة",
-    "Pumps and Valves for Fluid Control": "مضخات وصمامات للتحكم في السوائل",
-    "Heat Exchangers and Cooling Systems": "المبادلات الحرارية وأنظمة التبريد",
-    "Air Compressor": "ضاغط هواء",
-    "Exchangers": "مبادلات",
-    "Axial Compressor / Centrifugal Compressor": "ضاغط محوري / ضاغط طرد مركزي",
-    "Towers": "أبراج",
-    "Pressure Vessels and Expansion Tanks": "أوعية الضغط وخزانات التمدد",
-    "Hydronic Balancing Equipment": "معدات الموازنة المائية",
-    "Turbine Parts": "أجزاء التوربينات",
-    "Boilers": "غلايات",
-    "Centrifugal Compressor": "ضاغط طرد مركزي",
-    "Heaters": "سخانات",
-    "Heat Exchangers": "المبادلات الحرارية",
-    "Plate Heat Exchangers": "مبادلات حرارية لوحية",
-    "Indirect Air Heaters": "سخانات هواء غير مباشرة",
-    "Hybrid, Plate & Shell Heat Exchangers": "مبادلات حرارية هجينة ولوحية وأنبوبية",
-    "Cylinder Head": "رأس الأسطوانة",
-    "Heavy Vessels & Accessories": "أوعية ثقيلة وملحقاتها",
-    "Hydraulic Pumps": "مضخات هيدروليكية",
-    "Pressure Vessels": "أوعية الضغط",
-    "Steel Conduit and Accessories": "أنابيب صلب وملحقاتها",
-    "Spares and Accessories": "قطع غيار وملحقات",
-    "Tubular Heat Recuperator": "مسترد حرارة أنبوبي",
-    "Inlet Valves": "صمامات السحب",
-    "Centrifugal - Non Metallic (Pumps)": "مضخات طرد مركزي - غير معدنية",
-    "Hydraulic Motors": "محركات هيدروليكية",
-    "Alternators": "مولدات التيار المتردد",
-    "Boiler Piping": "أنابيب الغلايات",
-    "Chain Drive System": "نظام نقل الحركة بالسلاسل",
-    "Coolers": "مبردات",
-    "Engine Modules": "وحدات المحرك",
-    "Hydraulic Actuators": "مشغلات هيدروليكية",
-    "Motors": "محركات",
-    "Seal Kits": "أطقم موانع التسرب",
-    "Sensors": "مستشعرات",
-    "Fin Coils": "ملفات زعانف",
-    "Winches and Controls": "روافع وأدوات تحكم",
-    "Mixers and Agitators": "خلاطات ومقلبات",
-    "Diaphragm": "غشاء",
-    "Deep Well Cargo Pumps": "مضخات بضائع للآبار العميقة",
-    "Oil Cooler": "مبرد زيت",
-    "Cylinder Block": "كتلة الأسطوانة",
-    "Purifiers": "أجهزة تنقية",
-    "Oil Water Separators": "فواصل الزيت عن الماء",
-    "Flares": "مشاعل",
-    "Hydraulic Circuit": "دائرة هيدروليكية",
-    "Pistons": "مكابس",
-    "Skid Mount Packages": "حزم مثبتة على قواعد منزلقة",
-    "Valve Spring": "زنبرك الصمام",
-    "End Plates": "لوحات طرفية",
-    "Auxiliaries": "مساعدات",
-    "Pumps": "مضخات",
-    "Diving Winches": "روافع غوص",
-    "Thrusters": "دفاعات",
-    "Analytical Instrumentation": "أجهزة تحليلية",
-    "Process Refractometers": "أجهزة قياس الانكسار العملية",
-    "Flame & Gas Detection Devices": "أجهزة كشف اللهب والغاز",
-    "Flow Measurement Devices": "أجهزة قياس التدفق",
-    "Gauges & Switches": "مقاييس ومفاتيح",
-    "Heat Trace Products": "منتجات التتبع الحراري",
-    "Explosion Protection Devices": "أجهزة الحماية من الانفجار",
-    "I/O Signal Conditioners": "مكيفات إشارات الإدخال والإخراج",
-    "Level Measurement Devices & Controls": "أجهزة قياس مستوى وأدوات تحكم",
-    "Level Sensors & Controls": "مستشعرات مستوى وأدوات تحكم",
-    "Indicators": "مؤشرات",
-    "Pneumatic Cylinder": "أسطوانة تعمل بالهواء المضغوط",
-    "Single Solenoid Valves": "صمامات لولبية أحادية",
-    "Double Solenoid Valves": "صمامات لولبية مزدوجة",
-    "Vacuum Poppet Valves": "صمامات قرصية تفريغية",
-    "Quick Exhaust Valves": "صمامات عادم سريعة",
-    "Compact Cylinder": "أسطوانة مدمجة",
-    "Single Pilot Valves": "صمامات دليلية أحادية",
-    "Double Pilot Valves": "صمامات دليلية مزدوجة",
-    "Flow Control Valves": "صمامات التحكم في التدفق",
-    "Rodless Cylinder": "أسطوانة بدون قضيب",
-    "Water Solenoid Valves": "صمامات لولبية للماء",
-    "Steam Solenoid Valves": "صمامات لولبية للبخار",
-    "Filters, Regulators": "فلاتر ومنظمات",
-    "Guided Cylinder": "أسطوانة موجهة",
-    "Grippers (Pick and Place)": "مقابض (للتقاط والوضع)",
-    "Air Bellows": "منافيخ هواء",
-    "Shock Absorbers": "ممتصات صدمات",
-    "Directional Valve Series": "سلسلة الصمامات الاتجاهية",
-    "Modular Valve Series": "سلسلة صمامات معيارية",
-    "Pressure Valve Series": "سلسلة صمامات الضغط",
-    "Proportional Valve Series": "سلسلة صمامات تناسبية",
-    "Flow Control Valve Series": "سلسلة صمامات التحكم في التدفق",
-    "Cartridge Valve Series": "سلسلة صمامات خرطوشية",
-    "Engineering Machinery Valve": "صمام آلات هندسية",
-    "Hydraulic Station Series": "سلسلة محطات هيدروليكية",
-    "Standard Manifold Blocks": "كتل مشعب قياسية",
-    "Fluid Level Indicators": "مؤشرات مستوى السوائل",
-    "Hydraulic Cylinder": "أسطوانة هيدروليكية",
-    "Hydraulic Power Packs": "حزم طاقة هيدروليكية",
-    "Programmable Logic Control (PLC)": "جهاز التحكم المنطقي القابل للبرمجة (PLC)",
-    "Human Machine Interface (HMI)": "واجهة بين الإنسان والآلة (HMI)",
-    "Inductive Proximity Sensor": "مستشعر تقارب حثي",
-    "Capacitive Sensor": "مستشعر سعوي",
-    "Photoelectric Sensor": "مستشعر كهروضوئي",
-    "Fibre Optic Sensor": "مستشعر ألياف بصرية",
-    "Radar Level Sensor": "مستشعر مستوى راداري",
-    "Pressure Sensor": "مستشعر الضغط",
-    "Temperature Sensor": "مستشعر درجة الحرارة",
-    "RTD Sensor": "مستشعر RTD",
-    "Pulse Output Flowmeter": "مقياس تدفق بنبض إخراج",
-    "Turbine Flowmeter": "مقياس تدفق توربيني",
-    "Target Flowmeters": "مقاييس تدفق مستهدفة",
-    "Ultrasonic Flowmeter": "مقياس الجريان بالموجات فوق الصوتية",
-    "Rotameter": "مقياس الدوران",
-    "Watermeter": "عداد مياه",
-    "Diesel Flowmeter": "مقياس تدفق الديزل",
-    "Wiring Accessories": "ملحقات التمديدات السلكية",
-    "Cables and Wires": "كابلات وأسلاك",
-    "Cable": "كابل",
-    "Overhead Power Line Design": "تصميم خطوط الطاقة الهوائية",
-    "Trunking and Ladders": "قنوات وكابلات وسلالم",
-    "Busbars": "قضبان التوصيل",
-    "PVC Conduit and Accessories": "أنابيب PVC وملحقاتها",
-    "Grounding and Lightning Protection Design": "تصميم الحماية من الصواعق والتأريض",
-    "Control Cables": "كابلات تحكم",
-    "Data Cable": "كابل بيانات",
-    "Fibre Optic Cable": "كابل ألياف بصرية",
-    "Hazardous Location Electrical Design": "التصميم الكهربائي للأماكن الخطرة",
-    "Glands and Lugs": "غدد وعروات",
-    "High Temperature Cable": "كابل درجة حرارة عالية",
-    "Instrumentation Cable": "كابل أجهزة",
-    "Design and Supply of HIPPS Package": "تصميم وتوريد حزمة HIPPS",
-    "GI Conduits and Accessories": "أنابيب حديد مجلفن وملحقاتها",
-    "Industrial Plugs and Sockets": "مقابس ومآخذ صناعية",
-    "Electrical Tools": "أدوات كهربائية",
-    "PLC, DCS, ESD": "PLC، DCS، ESD",
-    "Flexible Cable": "كابل مرن",
-    "Networking Cables": "كابلات شبكات",
-    "Burner Management System": "نظام إدارة الحراقات",
-    "Multicore Industrial Cables": "كابلات صناعية متعددة النواة",
-    "Fire Resistant Cables": "كابلات مقاومة للحريق",
-    "Cable Trays": "حوامل الكابلات",
-    "SCADA Systems": "أنظمة سكادا",
-    "BMS Cable": "كابل BMS",
-    "Building Wires (PVC Insulated)": "أسلاك بناء (معزولة بـ PVC)",
-    "Coaxial Cables": "كابلات متحدة المحور",
-    "Control Room Hot Cut-over": "التحويل الساخن لغرفة التحكم",
-    "Solar Cables": "كابلات طاقة شمسية",
-    "Earthing and Lightning Protection": "التأريض والحماية من الصواعق",
-    "GI Back Boxes": "صناديق خلفية حديد مجلفن",
-    "SIL Studies": "دراسات SIL",
-    "Cable Join Kit": "طقم ربط الكابلات",
-    "PVC Trunking": "قنوات PVC",
-    "Circuit": "دائرة كهربائية",
-    "Relief Valves": "صمامات تنفيس",
-    "Cable Ties": "أربطة الكابلات",
-    "Water Heaters": "سخانات مياه",
-    "Switches": "مفاتيح",
-    "Mobile Instrument Calibration": "معايرة الأدوات المحمولة",
-    "Chemical Injection Packages": "حزم حقن المواد الكيميائية",
-    "Solar Timer Switches": "مفاتيح توقيت بالطاقة الشمسية",
-    "Switchyard": "ساحة مفاتيح",
-    "Substation": "محطة فرعية",
-    "F&G/SCADA Systems": "أنظمة كشف الغاز والحريق / سكادا",
-    "Fire Suppression Systems": "أنظمة إخماد الحرائق",
-    "Demulsifiers": "كاسرات الاستحلاب",
-    "Foaming Agent": "عامل رغوي",
-    "Corrosion Inhibitors": "مثبطات التآكل",
-    "Scale Inhibitors": "مثبطات الترسبات",
-    "H2S Scavengers": "مزيلات H2S",
-    "Water Clarifiers": "منقيات المياه",
-    "Rig Cleaning Surfactants": "خافضات التوتر السطحي لتنظيف الحفارات",
-    "Wellbore Cleaners": "منظفات آبار النفط",
-    "Iron Sulfide and Sludge Control": "التحكم في كبريتيد الحديد والحمأة",
-    "Green Solvents": "مذيبات خضراء",
-    "Alkylation": "الألكلة",
-    "Caustic Soda Flakes": "رقائق الصودا الكاوية",
-    "Sodium Hypochlorite": "هيبوكلوريت الصوديوم",
-    "Calcium Chloride": "كلوريد الكالسيوم",
-    "Hydrogen Peroxide": "بيروكسيد الهيدروجين",
-    "Soda Ash": "رماد الصودا",
-    "Biocides": "مبيدات حيوية",
-    "Surfactants": "خافضات التوتر السطحي",
-    "Gelling Agents": "عوامل تبلور",
-    "Defoamers": "مزيلات الرغوة",
-    "Asphaltene Dissolvers": "مذيبات الإسفلتين",
-    "Paraffin Inhibitors": "مثبطات البارافين",
-    "Lubricants": "زيوت التشحيم",
-    "Ammonium Polysulfide": "بولي كبريتيد الأمونيوم",
-    "Hydrochloric Acid": "حمض الهيدروكلوريك",
-    "Peracetic Acid": "حمض البيروكسي أسيتيك",
-    "Caustic Soda Lye": "غسول الصودا الكاوية",
-    "Sodium Carbonate (Na2CO3)": "كربونات الصوديوم",
-    "Rust Prime": "أساس مانع للصدأ",
-    "RXSOL": "ركسول",
-    "Water Treatment Chemicals": "كيماويات معالجة المياه",
-    "General Purpose Cleaners": "منظفات عامة",
-    "High Purity Calibration Gases": "غازات معايرة عالية النقاء",
-    "Methane (CH4)": "الميثان (CH4)",
-    "Carbon Monoxide (CO)": "أول أكسيد الكربون (CO)",
-    "Nitric Oxide (NO)": "أكسيد النيتريك (NO)",
-    "Propane (C3H8)": "البروبان (C3H8)",
-    "Flammable Gas": "غاز قابل للاشتعال",
-    "Oxygen Gas": "غاز الأكسجين",
-    "Multi Mix (Combination)": "خليط متعدد (مزيج)",
-    "Hydrogen Sulfide (H2S)": "كبريتيد الهيدروجين (H2S)",
-    "Nitrogen Dioxide (NO2)": "ثاني أكسيد النيتروجين (NO2)",
-    "Toxic Gas": "غاز سام",
-    "Sulfur Dioxide (SO2)": "ثاني أكسيد الكبريت (SO2)",
-    "Paint": "دهان",
-    "RO Membrane Cleaner": "منظف غشاء التناضح العكسي (RO)",
-    "Battery": "بطارية",
-    "Thinner": "مخفف دهان",
-    "Oil Spill Dispersant": "مشتت التسرب النفطي",
-    "Resin": "راتنج",
-    "Hypalon Glue": "غراء هيبالون",
-    "Tank Cleaners": "منظفات الخزانات",
-    "Rust Remover": "مزيل الصدأ",
-    "Multi Purpose Cleaner": "منظف متعدد الأغراض",
-    "Hydrochloric Acid Solution": "محلول حمض الهيدروكلوريك",
-    "Oil & Grease Emulsifier": "مستحلب الزيوت والشحوم"
-  }
+// Configure Cloudinary credentials
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+// Filtered Categories & Products Mapping
+const productCategoryMapping = {
+  "Pipes & Pipe Fittings": [
+    "Stainless Steel Pipes",
+    "Cast Iron Pipes",
+    "UPVC Pipes & Fittings",
+    "Copper Pipes",
+    "GI Pipes",
+    "PPR Pipes & Fittings",
+    "PEX Pipes",
+    "Cross-Linked Polyethylene Pipe",
+    "Rigid Pipes",
+    "HDPE Pipe",
+    "Flexi Pipes",
+    "ABS Pipe",
+    "Rainwater Pipe",
+    "CPVC Pipes",
+    "Polyvinyl Chloride (PVC) Pipes",
+    "Concrete Pipes",
+    "Polybutylene Pipes"
+  ],
+  "Oil Field Equipment": [
+    "Hoses",
+    "Hose Fittings",
+    "O-Rings & Seal Rings",
+    "Seals, O-Rings and Jointing Accessories",
+    "Manifolds",
+    "Manifold Fittings",
+    "BOP Testing Unit",
+    "Air Control Valve",
+    "BOP Spare Parts",
+    "Mud Chemicals",
+    "Safety Clamps",
+    "Wellheads",
+    "Hub Connections",
+    "Double Studded Adapter Flange"
+  ],
+  "Mechanical Products": [
+    "Valves and Fluid-Control Products",
+    "Air Compressors",
+    "Exchangers",
+    "Centrifugal Compressor",
+    "Expansion Tanks",
+    "Hydronic Balancing Equipment",
+    "Turbine Parts",
+    "Boilers and Boiler Piping",
+    "Heat Exchanger",
+    "Plate Heat Exchangers",
+    "Hydraulic Pumps and Motors",
+    "Pressure Vessels",
+    "Mechanical Spare Parts and Accessories",
+    "Heat Recuperators",
+    "Fin Coils and Coolers",
+    "Actuators and Control Components",
+    "Winches and Control",
+    "Mixers and Agitators",
+    "Hydraulic Circuit",
+    "Pumps and Pumping Instruments"
+  ],
+  "Process Control Products": [
+    "Heat-Tracing Products",
+    "Level Sensors and Controls"
+  ],
+  "Pneumatic Products": [
+    "Pneumatic Cylinders",
+    "Solenoid Valves",
+    "Flow-Control Valves",
+    "Filters and Regulators"
+  ],
+  "PLC and HMI Products": [
+    "Programmable Logic Controllers",
+    "Human Machine Interfaces"
+  ],
+  "Sensor Products": [
+    "Pressure Sensors",
+    "Temperature Sensors"
+  ],
+  "Flow Meter Products": [
+    "Flowmeters",
+    "Water Meters"
+  ],
+  "Electrical Products and Accessories": [
+    "Low-Voltage Cables and Wires",
+    "Cable Trays, Ladders and Trunking",
+    "PVC and GI Conduits",
+    "Control and Instrumentation Cables",
+    "Data and Fibre-Optic Cables",
+    "Electrical Accessories for Hazardous Locations",
+    "Glands, Lugs and Cable Accessories",
+    "High-Temperature Cables",
+    "Industrial Plugs and Sockets",
+    "PLC, DCS and ESD Components",
+    "Fire-Resistant Cable",
+    "SCADA and Control-System Products",
+    "BMS Cables",
+    "Solar Cables",
+    "Water Heaters"
+  ]
 };
 
-// Hardcoded parts of productDetailsMap
+// Category English to Arabic Translations
+const categoryTranslations = {
+  "Pipes & Pipe Fittings": "الأنابيب ووصلات الأنابيب",
+  "Oil Field Equipment": "معدات حقول النفط",
+  "Mechanical Products": "المنتجات الميكانيكية",
+  "Process Control Products": "منتجات التحكم في العمليات",
+  "Pneumatic Products": "المنتجات الهوائية",
+  "PLC and HMI Products": "منتجات PLC و HMI",
+  "Sensor Products": "منتجات الاستشعار",
+  "Flow Meter Products": "منتجات مقاييس التدفق",
+  "Electrical Products and Accessories": "المنتجات الكهربائية وملحقاتها"
+};
+
+// Product English to Arabic Translations
+const productTranslations = {
+  // Pipes & Pipe Fittings
+  "Stainless Steel Pipes": "أنابيب الصلب المقاوم للصدأ",
+  "Cast Iron Pipes": "أنابيب حديد الزهر",
+  "UPVC Pipes & Fittings": "أنابيب ووصلات UPVC",
+  "Copper Pipes": "أنابيب نحاسية",
+  "GI Pipes": "أنابيب الحديد المجلفن",
+  "PPR Pipes & Fittings": "أنابيب ووصلات PPR",
+  "PEX Pipes": "أنابيب بيكس",
+  "Cross-Linked Polyethylene Pipe": "أنبوب البولي إيثيلين المتقاطع",
+  "Rigid Pipes": "أنابيب صلبة",
+  "HDPE Pipe": "أنبوب HDPE",
+  "Flexi Pipes": "أنابيب مرنة",
+  "ABS Pipe": "أنبوب ABS",
+  "Rainwater Pipe": "أنبوب مياه الأمطار",
+  "CPVC Pipes": "أنابيب CPVC",
+  "Polyvinyl Chloride (PVC) Pipes": "أنابيب البولي فينيل كلوريد (PVC)",
+  "Concrete Pipes": "أنابيب خرسانية",
+  "Polybutylene Pipes": "أنابيب البولي بيوتيلين",
+
+  // Oil Field Equipment
+  "Hoses": "الخراطيم",
+  "Hose Fittings": "وصلات الخراطيم",
+  "O-Rings & Seal Rings": "الحلقات المانعة للتسرب",
+  "Seals, O-Rings and Jointing Accessories": "موانع التسرب والحلقات وملحقات التوصيل",
+  "Manifolds": "المشعبات",
+  "Manifold Fittings": "وصلات المشعبات",
+  "BOP Testing Unit": "وحدة اختبار مانع الانفجار",
+  "Air Control Valve": "صمام التحكم في الهواء",
+  "BOP Spare Parts": "قطع غيار مانع الانفجار",
+  "Mud Chemicals": "كيماويات الطين",
+  "Safety Clamps": "مشابك السلامة",
+  "Wellheads": "رؤوس الآبار",
+  "Hub Connections": "وصلات المحور",
+  "Double Studded Adapter Flange": "شفة محول مزدوجة المسامير",
+
+  // Mechanical Products
+  "Valves and Fluid-Control Products": "صمامات ومنتجات التحكم في السوائل",
+  "Air Compressors": "ضواغط الهواء",
+  "Exchangers": "المبادلات",
+  "Centrifugal Compressor": "ضاغط طرد مركزي",
+  "Expansion Tanks": "خزانات التمدد",
+  "Hydronic Balancing Equipment": "معدات الموازنة المائية",
+  "Turbine Parts": "أجزاء التوربينات",
+  "Boilers and Boiler Piping": "الغلايات وأنابيب الغلايات",
+  "Heat Exchanger": "مبادل حراري",
+  "Plate Heat Exchangers": "مبادلات حرارية لوحية",
+  "Hydraulic Pumps and Motors": "مضخات ومحركات هيدروليكية",
+  "Pressure Vessels": "أوعية الضغط",
+  "Mechanical Spare Parts and Accessories": "قطع غيار ميكانيكية وملحقاتها",
+  "Heat Recuperators": "مستردات الحرارة",
+  "Fin Coils and Coolers": "ملفات الزعانف والمبردات",
+  "Actuators and Control Components": "المشغلات ومكونات التحكم",
+  "Winches and Control": "الروافع وأدوات التحكم",
+  "Mixers and Agitators": "الخلاطات والمقلبات",
+  "Hydraulic Circuit": "الدائرة الهيدروليكية",
+  "Pumps and Pumping Instruments": "المضخات وأجهزة الضخ",
+
+  // Process Control Products
+  "Heat-Tracing Products": "منتجات التتبع الحراري",
+  "Level Sensors and Controls": "مستشعرات مستوى وأدوات تحكم",
+
+  // Pneumatic Products
+  "Pneumatic Cylinders": "أسطوانات تعمل بالهواء المضغوط",
+  "Solenoid Valves": "صمامات لولبية",
+  "Flow-Control Valves": "صمامات التحكم في التدفق",
+  "Filters and Regulators": "الفلاتر والمنظمات",
+
+  // PLC and HMI Products
+  "Programmable Logic Controllers": "أجهزة التحكم المنطقي القابلة للبرمجة (PLC)",
+  "Human Machine Interfaces": "واجهات بين الإنسان والآلة (HMI)",
+
+  // Sensor Products
+  "Pressure Sensors": "مستشعرات الضغط",
+  "Temperature Sensors": "مستشعرات درجة الحرارة",
+
+  // Flow Meter Products
+  "Flowmeters": "مقاييس التدفق",
+  "Water Meters": "عدادات المياه",
+
+  // Electrical Products and Accessories
+  "Low-Voltage Cables and Wires": "كابلات وأسلاك الجهد المنخفض",
+  "Cable Trays, Ladders and Trunking": "حوامل الكابلات والسلالم والقنوات",
+  "PVC and GI Conduits": "أنابيب PVC والحديد المجلفن",
+  "Control and Instrumentation Cables": "كابلات التحكم والأجهزة",
+  "Data and Fibre-Optic Cables": "كابلات البيانات والألياف البصرية",
+  "Electrical Accessories for Hazardous Locations": "الملحقات الكهربائية للأماكن الخطرة",
+  "Glands, Lugs and Cable Accessories": "الغدد والعروات وملحقات الكابلات",
+  "High-Temperature Cables": "كابلات درجات الحرارة العالية",
+  "Industrial Plugs and Sockets": "المقابس والمآخذ الصناعية",
+  "PLC, DCS and ESD Components": "مكونات PLC و DCS و ESD",
+  "Fire-Resistant Cable": "كابلات مقاومة للحريق",
+  "SCADA and Control-System Products": "منتجات أنظمة سكادا والتحكم",
+  "BMS Cables": "كابلات BMS",
+  "Solar Cables": "كابلات الطاقة الشمسية",
+  "Water Heaters": "سخانات المياه"
+};
+
+// Hardcoded features/specifications for enhanced product display
 const productDetailsMap = {
   "Hoses": {
     features: ["Flexible for diverse oilfield supplies tasks", "Durable materials ensure long performance", "Available in various sizes and types", "Resistant to high pressure abrasion", "Easy to install and use efficiently"]
@@ -323,20 +257,11 @@ const productDetailsMap = {
   "BOP Testing Unit": {
     features: ["Ensures safety through pressure testing", "Compact unit for convenient deployment", "Reliable performance for critical operations", "Adaptable to various well conditions", "Facilitates compliance with industry standards"]
   },
-  "Air Control Valves": {
+  "Air Control Valve": {
     features: ["Regulates airflow for precise control", "Ensures long-term reliability", "Available in various sizes and configurations", "Facilitates efficient pneumatic system operation", "Easy installation and maintenance"]
   },
   "BOP Spare Parts": {
     features: ["Essential for maintaining BOP functionality", "Ensures readiness for critical operations", "Wide range available for different models", "Reliable quality for long-term performance", "Facilitates rapid maintenance and repairs"]
-  },
-  "Pressure Gauges": {
-    features: ["Includes 2-inch 1502 hammer union", "Shock-resistant gauge with internal dampening", "Available in 40MPa, 60MPa, psi, kPa, & bar", "Clear polymer lens for accurate readings", "Liquid-filled to minimize vibration & wear", "Operating temperature: -50°C to +65°C"]
-  },
-  "Pressure Regulators": {
-    features: ["Controls and stabilizes fluid pressure", "Ensures consistent system operation", "Durable construction for reliable performance", "Available in various pressure ranges", "Facilitates precise pressure adjustment"]
-  },
-  "Needle Valves": {
-    features: ["Precice flow control for fluid systems", "Durable construction ensures reliability", "Available in various sizes and materials", "Facilitates fine adjustments in flow", "Easy installation and operation"]
   },
   "Safety Clamps": {
     features: ["Ensures secure pipe and tooling", "Vital for wellbore safety procedures", "Durable construction for reliable performance", "Available in various sizes and configurations", "Facilitates quick and safe operation"]
@@ -344,220 +269,207 @@ const productDetailsMap = {
   "Wellheads": {
     features: ["Critical component for oil extraction", "Safely controls pressure at the well", "Robust construction ensures reliability", "Available in various sizes and configurations", "Facilitates efficient well operation"]
   },
-  "Data Header": {
-    features: ["Collects and distributes oilfield supplies well data", "Essential for monitoring and analysis", "Robust construction ensures reliability", "Available in various configurations", "Facilitates efficient data management"]
-  },
   "Hub Connections": {
     features: ["Facilitates secure attachment of components", "Ensures reliable transmission of forces", "Robust construction for durability", "Available in various sizes and types", "Essential for safe and efficient operations"]
   },
-  "Top Connectors": {
-    features: ["Facilitates secure connection at the top", "Ensures reliable transmission of loads", "Essential for safe and efficient operations"],
-    specifications: "Sizes: 2-1/16 in through 7-1/16 in | Pressure Ratings: 2,000 psi through 20,000 psi"
-  },
-  "Spools - Drilling, Adapter & Spacer": {
-    features: ["Essential for well control operations", "Facilitates seamless equipment integration", "Robust construction ensures reliability", "Available in various configurations", "Enables efficient drilling processes"]
-  },
-  "Double Studded Adapter Flanges": {
+  "Double Studded Adapter Flange": {
     features: ["Facilitates connection between equipment", "Allows versatile wellhead configurations", "Robust construction ensures reliability", "Available in various sizes, pressure ratings", "Essential for well control operations"]
-  },
-  "Cast Steel Gate, Globe and Check Valves": {
-    specifications: "Design Standards: API 600, API 6D, ASME B16.34, API 603 | Sizes: 2 in to 72 in | Pressure Class: 150# to 2500# | Ends: RF, RTJ or BWE, (ASME B16.5, MSS-SP-44, B16.47)",
-    materials: ["WCA, WCB, WCC, LCB, LCC", "WC1, WC5, WC6, WC9, LC2, LC3, C5, C12, C12A", "CF8, CF8M, CF8C, CF10, CG8M", "CE8MN, CD6MN, CD3MN", "Monel M30C, M35-1, CZ100", "Inconel CY40, (Inconel 600)", "CW2M (Hastelloy C4)", "N12MV (Hastelloy B)", "CW12MW (Former Hastelloy C-276)", "CW6M (New Hastelloy C-276)", "CU5MCuC (Incoloy 825)", "N7M (Hastelloy B2)", "CW6MC (Inconel 625)", "Aluminium Bronze (95500, 95600, 9580)"],
-    features: ["Low fugitive emissions control", "NACE Service either MR-01-75 or MR-01-03", "By-Pass", "Lantern rings", "Grease injectors", "Damper and Counterweights for Check valves", "Chain-wheel, Gear operation", "Electric, Pneumatic or Hydraulic Actuation"]
-  },
-  "Forged Steel Gate, Globe and Check Valves": {
-    specifications: "Design Standards: API 602 | Sizes: 1/4 in to 2 in | Pressure Class: 800#, 1500# & 2500# | Ends: FNPT, SWE, RF, RTJ & BWE",
-    materials: ["A105, LF2, LF3", "F1, F11, F22, F5, F5a, F9", "F304, F316, F304L, F316L", "F51, F55", "Inconel", "Incoloy", "Monel"],
-    features: ["T & Y Patterns", "Bolted & Welded Bonnet", "Low fugitive emissions control", "NACE Service either MR-01-75 or MR-01-03"]
-  },
-  "Trunnion Mounted Ball Valve": {
-    specifications: "Design Standards: API 6D | Sizes: 2 in to 60 in | Pressure Class: 150, 300, 600, 900, 1500 & 2500# | Ends: RF, RTJ or BWE, (ASME B16.5, MSS-SP-44, B16.47)",
-    materials: ["A105 or WCB", "LF2, LF3 or LCB, LCC", "F316, F347 or CF8M, CF8C", "F51 or CD3MN", "F55 or CD3MWCuN"],
-    features: ["Bolted Body or Welded Body", "Anti-Static design", "Blow-out proof stem", "Double block and bleed (DBB)", "Fire-Safe design to API 6FA / API 607", "Self-relieving seats or double piston seats", "Cavity relief valve for liquid service"]
-  },
-  "Floating Ball Valves": {
-    specifications: "Design Standards: API 6D or API 608 | Sizes: 1/2 in to 8 in | Pressure Class: 150, 300, 600# | Ends: RF, RTJ or BWE, (ASME B16.5)",
-    materials: ["A105 or WCB", "LF2, LF3 or LCB, LCC", "F316, F347 or CF8M, CF8C", "F51 or CD3MN", "F55 or CD3MWCuN"],
-    features: ["Split body or end entry", "Anti-static design", "Blow-out proof stem", "Fire-Safe design to API 6FA / API 607", "Locking device optional"]
-  },
-  "Steel Lubricated Plug Valves": {
-    specifications: "Design Standards: API 6D or API 599 | Sizes: 1/2 in to 36 in | Pressure Class: 150, 300, 600, 900, 1500 & 2500# | Ends: RF, RTJ or BWE, (ASME B16.5)",
-    materials: ["A105 or WCB", "LF2 or LCB, LCC", "F316 or CF8M", "Super Duplex Steel"],
-    features: ["Regular, Short or Venturi patterns", "Metal-to-metal seating with sealant injection", "Self-cleaning action on plug rotation", "Fire-safe design API 6FA / API 607", "Locking device optional"]
-  },
-  "Pressure Seal Cast Steel Valves": {
-    specifications: "Design Standards: ASME B16.34 | Sizes: 2 in to 24 in | Pressure Class: 600, 900, 1500 & 2500# | Ends: BW or RTJ / RF",
-    materials: ["WCB, WCC, LCB, LCC", "WC6, WC9, C5, C12, C12A", "CF8M, CF8C"],
-    features: ["Pressure seal bonnet design", "Flexible wedge for gate valves", "Stellite hardfacing on seats", "Low fugitive emissions control"]
-  },
-  "Duo Check Cast Steel Valves": {
-    specifications: "Design Standards: API 594 | Sizes: 2 in to 60 in | Pressure Class: 150, 300, 600, 900, 1500 & 2500# | Ends: Wafer, Lug or Flanged",
-    materials: ["WCB, LCB, LCC", "CF8, CF8M, CF3, CF3M", "Duplex and Super Duplex Steel"],
-    features: ["Dual plate spring loaded design", "Low pressure drop across valve", "Resilient or Metal seating", "Compact face-to-face dimensions"]
-  },
-  "Slab Gate Valves": {
-    specifications: "Design Standards: API 6D | Sizes: 2 in to 48 in | Pressure Class: 150, 300, 600, 900, 1500 & 2500# | Ends: RF, RTJ or BWE",
-    materials: ["WCB, LCB, LCC", "CF8, CF8M, CF3, CF3M", "Duplex Steel"],
-    features: ["Through-conduit slab gate", "Double block and bleed (DBB)", "Bi-directional sealing", "Cavity pressure relief", "Seats with thermoplastic inserts"]
-  },
-  "Expanding Gate Valves": {
-    specifications: "Design Standards: API 6D or API 6A | Sizes: 2 in to 24 in | Pressure Class: 150, 300, 600, 900, 1500 & 2500# | Ends: RF, RTJ or BWE",
-    materials: ["WCB, LCB, LCC", "CF8, CF8M", "Duplex Steel"],
-    features: ["Mechanical expanding gate design", "Positive tight seal under low/high pressure", "Double block and bleed (DBB)", "Ideal for abrasive media"]
-  },
-  "Butterfly Valves": {
-    specifications: "Design Standards: API 609, ASME B16.34 | Sizes: 2 in to 80 in | Pressure Class: 150, 300, 600# | Ends: Wafer, Lug or Flanged",
-    materials: ["WCB, LCB, LCC", "CF8, CF8M, CF3, CF3M", "Aluminium Bronze", "Duplex Steel"],
-    features: ["Triple offset geometry", "Zero-leakage bi-directional shutoff", "Metal-to-metal seating", "Laminated seal ring on disc", "Fire-safe design to API 607"]
-  },
-  "Instrumentation DBB Valves": {
-    specifications: "Design Standards: ASME B16.34, MSS-SP-99 | Sizes: 1/2 in to 2 in | Pressure Class: 150# to 2500# (up to 6000 psi) | Ends: NPT, Socket Weld, Flanged",
-    materials: ["A105, LF2", "F316, F316L", "Duplex Steel", "Monel", "Hastelloy"],
-    features: ["Double block and bleed in single body", "Reduced installation space and leakage paths", "Ball or needle valve configurations", "Anti-blowout stem design", "Fire-safe design optional"]
   }
 };
 
-// Simple helper to translate technical spec strings to Arabic
-function translateSpecs(specs) {
-  if (!specs) return '';
-  let result = specs;
-  const dict = {
-    'Design Standards': 'معايير التصميم',
-    'Design Standard': 'معيار التصميم',
-    'Standards': 'المعايير',
-    'Standard': 'المعيار',
-    'Sizes': 'الأحجام',
-    'Size': 'الحجم',
-    'Pressure Class': 'فئة الضغط',
-    'Pressure Ratings': 'درجات الضغط',
-    'Ends': 'الأطراف',
-    'Materials': 'المواد',
-    'Features': 'الميزات',
-    'Rating': 'التقييم',
-    'Class': 'الفئة',
-    'to': 'إلى',
-    'in': 'بوصة',
-    'through': 'إلى'
-  };
-  Object.entries(dict).forEach(([en, ar]) => {
-    const escapedEn = en.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-    const regex = new RegExp(`\\b${escapedEn}\\b`, 'gi');
-    result = result.replace(regex, ar);
-  });
-  return result;
+// Fetch non-sample image resources from Cloudinary
+async function fetchCloudinaryImages() {
+  console.log('☁️  Fetching image URLs from Cloudinary...');
+  let allResources = [];
+  let nextCursor = null;
+
+  try {
+    do {
+      const res = await cloudinary.api.resources({
+        type: 'upload',
+        max_results: 500,
+        next_cursor: nextCursor
+      });
+      allResources = allResources.concat(res.resources);
+      nextCursor = res.next_cursor;
+    } while (nextCursor);
+
+    const validImages = allResources.filter(r =>
+      !r.public_id.startsWith('samples/') &&
+      !r.public_id.startsWith('cld-sample') &&
+      !r.public_id.startsWith('ipts/assets/') &&
+      !r.public_id.startsWith('ipts/branding/') &&
+      r.public_id !== 'sample' &&
+      r.public_id !== 'main-sample'
+    );
+
+    const cleanStr = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    const imageMapList = validImages.map(img => {
+      const parts = img.public_id.split('/');
+      const filename = parts[parts.length - 1];
+      const cleanFilename = cleanStr(filename.replace(/_[a-z0-9]{6}$/i, ''));
+      const fullClean = cleanStr(img.public_id);
+      return {
+        public_id: img.public_id,
+        cleanFilename,
+        fullClean,
+        url: img.secure_url
+      };
+    });
+
+    console.log(`✅ Loaded ${imageMapList.length} product & equipment images from Cloudinary.`);
+    return imageMapList;
+  } catch (err) {
+    console.warn('⚠️  Could not fetch Cloudinary images:', err.message);
+    return [];
+  }
+}
+
+// Map product name to the most relevant Cloudinary image URL
+function findImageForProduct(prodName, categoryName, imageMapList) {
+  if (!imageMapList || imageMapList.length === 0) return '';
+
+  const cleanStr = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const targetClean = cleanStr(prodName);
+
+  // 1. Exact match on clean filename
+  let match = imageMapList.find(img => img.cleanFilename === targetClean);
+  if (match) return match.url;
+
+  // 2. Substring match
+  match = imageMapList.find(img =>
+    img.cleanFilename.length > 3 && (
+      img.cleanFilename.includes(targetClean) || targetClean.includes(img.cleanFilename)
+    )
+  );
+  if (match) return match.url;
+
+  // 3. Token similarity match
+  const targetWords = prodName.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2);
+  let bestScore = 0;
+  let bestUrl = null;
+
+  for (const img of imageMapList) {
+    let score = 0;
+    for (const w of targetWords) {
+      if (img.fullClean.includes(w)) {
+        score += w.length;
+      }
+    }
+    if (score > bestScore && score >= 4) {
+      bestScore = score;
+      bestUrl = img.url;
+    }
+  }
+
+  if (bestUrl) return bestUrl;
+
+  // 4. Category fallback image
+  const catClean = cleanStr(categoryName);
+  const catMatch = imageMapList.find(img => img.fullClean.includes(catClean));
+  return catMatch ? catMatch.url : '';
 }
 
 async function seedData() {
   try {
-    if (!process.env.MONGO_URI || process.env.MONGO_URI.includes('<password>') || process.env.MONGO_URI.includes('xxxxx')) {
-      console.error('❌ Migration aborted: MONGO_URI in backend/.env has placeholder credentials.');
-      return;
+    const dbUri = process.env.MONGO_URI || 'mongodb://localhost:27017/iptsDB';
+    console.log(`🔗 Connecting to Local MongoDB at ${dbUri}...`);
+    await mongoose.connect(dbUri);
+    console.log('✅ Connected to Local MongoDB');
+
+    // 0. Fetch Cloudinary images
+    const cloudinaryImages = await fetchCloudinaryImages();
+
+    // 1. Clear previous data
+    console.log('\n🗑️ Removing previous categories and products from local DB...');
+    await Category.deleteMany({});
+    await Product.deleteMany({});
+    console.log('✅ Removed previous local collection data.');
+
+    // 2. Seed Categories
+    console.log('\n📁 Seeding Categories...');
+    const catMap = {};
+    for (const [catName, catNameAr] of Object.entries(categoryTranslations)) {
+      const catImage = findImageForProduct(catName, catName, cloudinaryImages);
+      const createdCat = await Category.create({
+        name: catName,
+        nameAr: catNameAr,
+        image: catImage,
+        description: '',
+        descriptionAr: '',
+        productCount: 0
+      });
+      catMap[catName] = createdCat;
     }
+    console.log(`✅ Successfully seeded ${Object.keys(catMap).length} categories.`);
 
-    console.log('🔗 Connecting to MongoDB...');
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log('✅ Connected to MongoDB Atlas');
-
-    // 1. Migrate Categories
-    console.log('\n📁 Migrating Categories...');
-    const categories = await Category.find();
-    let updatedCats = 0;
-    
-    for (const cat of categories) {
-      // Find case-insensitive exact translation match
-      const matchedKey = Object.keys(dynamicTranslations.categories).find(
-        k => k.trim().toLowerCase() === cat.name.trim().toLowerCase()
-      );
-      const nameAr = matchedKey ? dynamicTranslations.categories[matchedKey] : '';
-      
-      cat.nameAr = nameAr;
-      await cat.save();
-      updatedCats++;
-    }
-    console.log(`✅ Successfully updated ${updatedCats} categories with Arabic fields.`);
-
-    // 2. Migrate Products
-    console.log('\n📦 Migrating Products...');
-    const products = await Product.find();
-    let updatedProds = 0;
-
-    for (const prod of products) {
-      // Find product name translation (with case-insensitive trim matching)
-      const matchedProdKey = Object.keys(dynamicTranslations.products).find(
-        k => k.trim().toLowerCase() === prod.productName.trim().toLowerCase()
-      );
-      const nameAr = matchedProdKey ? dynamicTranslations.products[matchedProdKey] : '';
-      
-      // Find category translation (with case-insensitive trim matching)
-      const matchedCatKey = Object.keys(dynamicTranslations.categories).find(
-        k => k.trim().toLowerCase() === prod.category.trim().toLowerCase()
-      );
-      const categoryAr = matchedCatKey ? dynamicTranslations.categories[matchedCatKey] : '';
-
-      prod.productNameAr = nameAr || prod.productName; // Fallback to EN if missing
-      prod.categoryAr = categoryAr || prod.category;
-
-      // Check specifications & enrichments from productDetailsMap
-      const matchedDetailKey = Object.keys(productDetailsMap).find(
-        k => k.trim().toLowerCase() === prod.productName.trim().toLowerCase()
-      );
-      const details = matchedDetailKey ? productDetailsMap[matchedDetailKey] : null;
-
-      if (details) {
-        if (details.overview) {
-          prod.description = details.overview;
-          // Look up if overview description has a translation in products
-          const matchedOverviewKey = Object.keys(dynamicTranslations.products).find(
-            k => k.trim().toLowerCase() === details.overview.trim().toLowerCase()
-          );
-          prod.descriptionAr = matchedOverviewKey ? dynamicTranslations.products[matchedOverviewKey] : '';
-        }
-        
-        if (details.specifications) {
-          prod.specifications = details.specifications;
-          prod.specificationsAr = translateSpecs(details.specifications);
-        }
-
-        if (details.features && details.features.length > 0) {
-          prod.features = details.features;
-          prod.featuresAr = details.features.map(f => {
-            const matchedFeatKey = Object.keys(dynamicTranslations.products).find(
-              k => k.trim().toLowerCase() === f.trim().toLowerCase()
-            );
-            return matchedFeatKey ? dynamicTranslations.products[matchedFeatKey] : f;
-          });
-        }
-
-        if (details.materials && details.materials.length > 0) {
-          prod.materials = details.materials;
-          prod.materialsAr = details.materials.map(m => {
-            const matchedMatKey = Object.keys(dynamicTranslations.products).find(
-              k => k.trim().toLowerCase() === m.trim().toLowerCase()
-            );
-            return matchedMatKey ? dynamicTranslations.products[matchedMatKey] : m;
-          });
-        }
-
-        if (details.applications && details.applications.length > 0) {
-          prod.applications = details.applications;
-          prod.applicationsAr = details.applications.map(a => {
-            const matchedAppKey = Object.keys(dynamicTranslations.products).find(
-              k => k.trim().toLowerCase() === a.trim().toLowerCase()
-            );
-            return matchedAppKey ? dynamicTranslations.products[matchedAppKey] : a;
-          });
-        }
+    // Build reverse category lookup for products
+    const productToCategoryMap = {};
+    for (const [catName, prodList] of Object.entries(productCategoryMapping)) {
+      for (const prodName of prodList) {
+        productToCategoryMap[prodName.toLowerCase().trim()] = catName;
       }
-
-      await prod.save();
-      updatedProds++;
     }
 
-    console.log(`✅ Successfully enriched and updated ${updatedProds} products.`);
-    console.log('\n🎉 Translation and product enrichment seed complete!');
+    // 3. Seed Products
+    console.log('\n📦 Seeding Products...');
+    let createdProds = 0;
+    const catCounts = {};
+
+    for (const [catName, prodList] of Object.entries(productCategoryMapping)) {
+      const catNameAr = categoryTranslations[catName] || '';
+
+      for (const prodName of prodList) {
+        const prodNameAr = productTranslations[prodName] || prodName;
+        const prodImage = findImageForProduct(prodName, catName, cloudinaryImages);
+
+        const details = productDetailsMap[prodName] || null;
+
+        let description = '';
+        let descriptionAr = '';
+        let features = [];
+        let featuresAr = [];
+
+        if (details) {
+          if (details.overview) {
+            description = details.overview;
+          }
+          if (details.features && details.features.length > 0) {
+            features = details.features;
+          }
+        }
+
+        await Product.create({
+          productName: prodName,
+          productNameAr: prodNameAr,
+          category: catName,
+          categoryAr: catNameAr,
+          image: prodImage,
+          description,
+          descriptionAr,
+          features,
+          featuresAr
+        });
+
+        createdProds++;
+        catCounts[catName] = (catCounts[catName] || 0) + 1;
+      }
+    }
+
+    // 4. Update productCount for categories
+    for (const [catName, count] of Object.entries(catCounts)) {
+      if (catMap[catName]) {
+        catMap[catName].productCount = count;
+        await catMap[catName].save();
+      }
+    }
+
+    console.log(`✅ Successfully seeded ${createdProds} products across 9 categories locally with Cloudinary image mapping.`);
+    console.log('\n🎉 Local product and category seeding complete!');
     await mongoose.disconnect();
   } catch (err) {
-    console.error('❌ Seeding/Migration failed:', err);
+    console.error('❌ Local seeding failed:', err);
     try { await mongoose.disconnect(); } catch(e) {}
     process.exit(1);
   }
